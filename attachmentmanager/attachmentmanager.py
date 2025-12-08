@@ -21,10 +21,10 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import Qt, QSettings, QTranslator, QCoreApplication
-from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QMessageBox
-from qgis.core import Qgis, QgsMessageLog, QgsProject
+from qgis.PyQt.QtCore import Qt, QSettings, QTranslator, QCoreApplication # type: ignore
+from qgis.PyQt.QtGui import QIcon # type: ignore
+from qgis.PyQt.QtWidgets import QAction, QMessageBox # type: ignore
+from qgis.core import Qgis, QgsMessageLog, QgsProject # type: ignore
 import re
 
 # Initialize Qt resources from file resources.py
@@ -223,11 +223,11 @@ class AttachmentManager:
                 # Do something useful here - delete the line containing pass and
                 # substitute with your code.
                 pass
-        else:
+        elif self.dlgActive:
             msgBox = QMessageBox()
             msgBox.setIcon(QMessageBox.Icon.Warning)
             msgBox.setWindowTitle("Advarsel")
-            msgBox.setText("Der er ikke valgt et aktivt lag!\n\nVælg venligst et lag, og prøv igen!")
+            msgBox.setText("1 Der er ikke valgt et aktivt lag!\n\nVælg venligst et lag, og prøv igen!")
             msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
             msgBox.exec()
 
@@ -253,27 +253,49 @@ class AttachmentManager:
             
 
     def onActiveLayerChanged(self, layer):
-        if layer and self.dlgActive: 
-            if self.lastActiveLayer and layer.id() != self.lastActiveLayer:
-                QgsMessageLog.logMessage(f"Layer changed: '{layer.name()} id: {layer.id()}'", tag="AttachmentManager", level=Qgis.Info )
-                layer.selectionChanged.connect(onSelectionChanged)
+        QgsMessageLog.logMessage(f"Active layer changing! {layer.name() if layer else 'None'}", tag="AttachmentManager", level=Qgis.Info )
 
-                self.lastActiveLayer = layer.id()
-        else:
-            # Check if the layer panel contains layers at all
-            if len(QgsProject.instance().mapLayers()) > 0:
+        if layer:
+            if self.dlgActive: 
+                if layer != self.lastActiveLayer:
+                    QgsMessageLog.logMessage(f"Layer changed: '{layer.name()} id: {layer.id()}'", tag="AttachmentManager", level=Qgis.Info )
+                    # Disconnect the previously connected layer
+                    if self.lastActiveLayer:
+                        self.lastActiveLayer.selectionChanged.disconnect(self.onSelectionChanged)
+                    # And connect the new layer
+                    layer.selectionChanged.connect(self.onSelectionChanged)
+
+                    self.lastActiveLayer = layer
+            # else:
+            #     # Check if the layer panel contains layers at all
+            #     if len(QgsProject.instance().mapLayers()) > 0:
+            #         msgBox = QMessageBox()
+            #         msgBox.setIcon(QMessageBox.Icon.Warning)
+            #         msgBox.setWindowTitle("Advarsel")
+            #         msgBox.setText("2 Der er ikke valgt et aktivt lag!\n\nVælg venligst et lag, og prøv igen!")
+            #         msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
+            #         msgBox.exec()
+
+    def loadAttachmentList(self, layer):
+        QgsMessageLog.logMessage(f"Clearing and loading attachment from new selection: {layer.name()}", tag="AttachmentManager", level=Qgis.Info )
+        self.dlg.listAttachment.clear()
+        self.dlg.listAttachment.addItem("Dummy attachment for selected feature")
+        
+    def onSelectionChanged(self):
+        QgsMessageLog.logMessage(f"Selection changed - number of selected features: {self.lastActiveLayer.selectedFeatureCount()}", tag="AttachmentManager", level=Qgis.Info )
+        if self.dlgActive:
+            if self.lastActiveLayer.selectedFeatureCount() != 1: 
                 msgBox = QMessageBox()
                 msgBox.setIcon(QMessageBox.Icon.Warning)
                 msgBox.setWindowTitle("Advarsel")
-                msgBox.setText("Der er ikke valgt et aktivt lag!\n\nVælg venligst et lag, og prøv igen!")
+                msgBox.setText("Vælg ét og kun ét objekt for at få vist vedhæftede filer!")
                 msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
                 msgBox.exec()
-    
-    def loadAttachmentList(self, layer):
-        pass
-        
-    def onSelectionChanged(self):
-        QgsMessageLog.logMessage(f"Selection changed - number of selected features: '{self.activeLayer.selectedFeatures()}'", tag="AttachmentManager", level=Qgis.Info )
+            else:
+                QgsMessageLog.logMessage(f"Exactly 1 feature selected!", tag="AttachmentManager", level=Qgis.Info )
+                self.loadAttachmentList(self.lastActiveLayer)
+
+
 
 
 def parseConnectionString(s):

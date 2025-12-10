@@ -5,12 +5,12 @@
 [general]
 name=AttachmentManager
 qgisMinimumVersion=3.4
-description=This plugin provides functionality that makes it possible to add, delete and show attachments (files) to geographic objects in a PostGIS database.
+description=This plugin provides functionality that makes it possible to add, delete and show attachments (files) to spatial objects in a PostGIS database.
 version=0.1
 author=Morten Storm, Styrke 10 ApS
 email=morten@styrke10.dk
 
-about=This plugin provides functionality that makes it possible to add, delete and show attachments (files) to geographic objects in a PostGIS database.
+about=This plugin provides functionality that makes it possible to add, delete and show attachments (files) to spatial objects in a PostGIS database.
 
 tracker=http://bugs
 repository=http://repo
@@ -27,7 +27,7 @@ tags=python
 
 homepage=http://homepage
 category=Plugins
-icon=icon.png
+icon=attachment.png
 # experimental flag
 experimental=False
 

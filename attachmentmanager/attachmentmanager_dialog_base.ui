@@ -88,23 +88,29 @@
    <property name="geometry">
     <rect>
      <x>20</x>
-     <y>20</y>
+     <y>40</y>
      <width>258</width>
-     <height>291</height>
+     <height>271</height>
     </rect>
    </property>
    <layout class="QVBoxLayout" name="verticalLayout">
     <item>
-     <widget class="QLabel" name="label">
-      <property name="text">
-       <string>Attachments på det valgte objekt:</string>
-      </property>
-     </widget>
-    </item>
-    <item>
      <widget class="QListWidget" name="listAttachment"/>
     </item>
    </layout>
+  </widget>
+  <widget class="QLabel" name="attachmentLabel">
+   <property name="geometry">
+    <rect>
+     <x>20</x>
+     <y>20</y>
+     <width>421</width>
+     <height>16</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Attachments på det valgte objekt:</string>
+   </property>
   </widget>
  </widget>
  <resources/>

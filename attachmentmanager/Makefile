@@ -48,7 +48,7 @@ PY_FILES = \
 
 UI_FILES = attachmentmanager_dialog_base.ui
 
-EXTRAS = metadata.txt icon.png
+EXTRAS = metadata.txt attachment.png attachmentmanager.ini README.md LICENSE.txt
 
 EXTRA_DIRS =
 

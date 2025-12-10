@@ -23,10 +23,9 @@
 """
 
 import os
-import tempfile
-from qgis.PyQt import uic
-from qgis.PyQt import QtWidgets
-from qgis.core import Qgis, QgsMessageLog
+from qgis.PyQt import uic # type: ignore
+from qgis.PyQt import QtWidgets # type: ignore
+from qgis.core import Qgis, QgsMessageLog # type: ignore
 
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
@@ -49,10 +48,6 @@ class AttachmentManagerDialog(QtWidgets.QDialog, FORM_CLASS):
         
         # Connect the close button to the function doing this
         self.btnClose.clicked.connect(self.closeDlg)
-        
-        # Create temporary folder for files being previewed
-        self.plugin.tempFolder = tempfile.TemporaryDirectory()
-        QgsMessageLog.logMessage(f"Temp folder set to: '{self.plugin.tempFolder}'", tag="AttachmentManager", level=Qgis.Info )
 
 
     def closeDlg(self):
@@ -60,9 +55,6 @@ class AttachmentManagerDialog(QtWidgets.QDialog, FORM_CLASS):
         self.close()
 
     def closeEvent(self, event):
-        # Clean up temporary folder
-        QgsMessageLog.logMessage("Temp folder cleaning coming up!", tag="AttachmentManager", level=Qgis.Info )
-        self.plugin.tempFolder.cleanup()
         self.plugin.dlgActive = False
         
         super().closeEvent(event)

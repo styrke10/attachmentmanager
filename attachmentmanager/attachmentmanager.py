@@ -21,11 +21,12 @@
  *                                                                         *
  ***************************************************************************/
 """
-from qgis.PyQt.QtCore import Qt, QSettings, QTranslator, QCoreApplication # type: ignore
-from qgis.PyQt.QtGui import QIcon # type: ignore
-from qgis.PyQt.QtWidgets import QAction, QMessageBox # type: ignore
-from qgis.core import Qgis, QgsMessageLog, QgsProject # type: ignore
-import re
+from qgis.PyQt.QtCore import Qt, QSettings, QTranslator, QCoreApplication, QUrl # type: ignore
+from qgis.PyQt.QtGui import QIcon, QDesktopServices # type: ignore
+from qgis.PyQt.QtWidgets import QAction, QMessageBox, QFileDialog, QApplication # type: ignore
+from qgis.core import Qgis, QgsMessageLog # type: ignore
+import sys, psycopg2, os, uuid, tempfile, atexit, configparser
+from psycopg2 import Binary
 
 # Initialize Qt resources from file resources.py
 from .resources import *
@@ -69,12 +70,29 @@ class AttachmentManager:
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
         
-        # Prepare attribute for temporary folder name
-        self.tempFolder = None
+        
+        # Create temporary folder for files being previewed
+        self.tempFolder = tempfile.TemporaryDirectory()
+        QgsMessageLog.logMessage(f"Temp folder set to: '{self.tempFolder}'", tag="AttachmentManager", level=Qgis.Info )
+
+        # Track whether we've already cleaned up to avoid double cleanup
+        self._cleanedTempDir = False
+
+        # Connect to application quit to ensure cleanup even if unload() is not called
+        QApplication.instance().aboutToQuit.connect(self._cleanup_temp_dir)
+
+        # Also register an atexit fallback
+        atexit.register(self._cleanup_temp_dir)
+
         # Attribute for connection parameters
         self.connParams = None
         
-        self.dlgActive = False    
+        self.dlgActive = False   
+        self.relationalID = None 
+        self.selectedFeatureID = None
+
+        # Read configuration
+        self.readConfig()
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -169,7 +187,7 @@ class AttachmentManager:
     def initGui(self):
         """Create the menu entries and toolbar icons inside the QGIS GUI."""
 
-        icon_path = ':/plugins/attachmentmanager/icon.png'
+        icon_path = ':/plugins/attachmentmanager/attachment.png'
         self.add_action(
             icon_path,
             text=self.tr(u'AttachmentManager'),
@@ -182,9 +200,12 @@ class AttachmentManager:
             
         # Detect changes in active layer
         self.iface.currentLayerChanged.connect(self.onActiveLayerChanged)
-        
+
 
     def unload(self):
+        # Clean up temporary folder
+        self._cleanup_temp_dir()
+
         """Removes the plugin menu item and icon from QGIS GUI."""
         for action in self.actions:
             self.iface.removePluginMenu(
@@ -192,6 +213,43 @@ class AttachmentManager:
                 action)
             self.iface.removeToolBarIcon(action)
 
+
+    def _cleanup_temp_dir(self):
+        """Safely cleanup the temporary directory (idempotent)."""
+        if self._cleanedTempDir:
+            return
+
+        try:
+            # Ensure files are closed before cleanup (Windows may otherwise fail)
+            # If you keep any open handles, close them here.
+
+            # Trigger TemporaryDirectory cleanup (recursively deletes the folder)
+            self.tempFolder.cleanup()
+            self._cleanedTempDir = True
+
+            QgsMessageLog.logMessage(f"Temp folder deleted: {self.tempFolder.name}", "AttachmentManager", level=Qgis.Info)
+        except Exception as e:
+            # Fallback: attempt manual removal if cleanup failed
+            try:
+                import shutil
+                shutil.rmtree(self.tempFolder, ignore_errors=True)
+                self._cleanedTempDir = True
+                QgsMessageLog.logMessage( f"Temp folder force-removed (fallback): {self.tempFolder.name}", "AttachmentManager", level=Qgis.Warning )
+            except Exception as e2:
+                QgsMessageLog.logMessage(f"Failed to delete temp folder: {e} / Fallback error: {e2}", "AttachmentManager", level=Qgis.Critical)
+
+
+    def readConfig(self):
+        """Read settings from ini file."""
+        config = configparser.ConfigParser()
+        config.read("AttachmentManager.ini")
+        self.tablePostfix = config.get("AttachmentSetup", "tablepostfix", fallback="_Attachments")
+        self.fieldPrefix = config.get("AttachmentSetup", "fieldprefix", fallback="rel") 
+
+        self.fieldSetup = {}
+        self.fieldSetup['id_field'] = config.get("TableSetup", "id_field", fallback="Id")
+        self.fieldSetup['name_field'] = config.get("TableSetup", "name_field", fallback="FileName")
+        self.fieldSetup['content_field'] = config.get("TableSetup", "content_field", fallback="FileContent")
 
     def run(self):
         """Run method that performs all the real work"""
@@ -205,14 +263,28 @@ class AttachmentManager:
             # Set window flags to stay on top of QGIS only
             self.dlg.setWindowFlags(Qt.Dialog)
 
+            # Connect buttons to functions
+            self.dlg.btnAttachShow.clicked.connect(self.showAttachment)
+            self.dlg.btnAttachAdd.clicked.connect(self.addAttachment)
+            self.dlg.btnAttachDelete.clicked.connect(self.deleteAttachment)
+            self.dlg.listAttachment.doubleClicked.connect(self.showAttachment)
+
         # Get active layer
         activeLayer = self.iface.activeLayer()
         QgsMessageLog.logMessage(f"Active layer: '{activeLayer.name()}'", tag="AttachmentManager", level=Qgis.Info )
+        # Disconnect lastActiveLayer if appropriate
+        if self.lastActiveLayer and self.lastActiveLayer.receivers(self.lastActiveLayer.selectionChanged) > 0:
+            self.lastActiveLayer.selectionChanged.disconnect(self.onSelectionChanged)
 
         # Check if active layer is selected
         if activeLayer != None:
-            connectionParams = self.getConnParams(activeLayer)
-            
+            if self.checkLayerOrigin(activeLayer):    
+                self.layerHasAttachments = self.checkLayerAttachmentTable(activeLayer)
+                self.lastActiveLayer = activeLayer
+                self.dlg.attachmentLabel.setText(f"Attachments på det valgte objekt på lag '{activeLayer.name()}'")
+                # Connect to selection changed signal 
+                activeLayer.selectionChanged.connect(self.onSelectionChanged, type=Qt.UniqueConnection)
+
             # show the dialog
             self.dlg.show()
             self.dlgActive = True
@@ -224,81 +296,435 @@ class AttachmentManager:
                 # substitute with your code.
                 pass
         elif self.dlgActive:
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Icon.Warning)
-            msgBox.setWindowTitle("Advarsel")
-            msgBox.setText("1 Der er ikke valgt et aktivt lag!\n\nVælg venligst et lag, og prøv igen!")
-            msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
-            msgBox.exec()
+            self.dlg.attachmentLabel.setText("Intet aktivt lag valgt")
+            showMsgBox("Der er ikke valgt et aktivt lag!\n\nVælg venligst et lag, og prøv igen!", title="Advarsel", icon=QMessageBox.Icon.Warning)
 
-    def fillAttachmentList(self, layer):
-        self.connParams = self.getConnParams(layer)
-        self.loadAttachmentList(layer)
-        QgsMessageLog.logMessage(f"Connection params: '{self.connParams}'", tag="AttachmentManager", level=Qgis.Info )
-        
-
-    def getConnParams(self, activeLayer):
-        QgsMessageLog.logMessage(f"Active layer source: '{activeLayer.source()}'", tag="AttachmentManager", level=Qgis.Info )
-        if activeLayer.dataProvider().name() != 'postgres':
-            msgBox = QMessageBox()
-            msgBox.setIcon(QMessageBox.Icon.Warning)
-            msgBox.setWindowTitle("Advarsel")
-            msgBox.setText("Kun PostGIS lag er understøttet!\n\nVælg venligst et andet lag, og prøv igen!")
-            msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
-            msgBox.exec()
-            return None
-
-        # Return connection parameters as a dictionary
-        return parseConnectionString(activeLayer.source())
-            
-
+    
     def onActiveLayerChanged(self, layer):
         QgsMessageLog.logMessage(f"Active layer changing! {layer.name() if layer else 'None'}", tag="AttachmentManager", level=Qgis.Info )
 
-        if layer:
-            if self.dlgActive: 
-                if layer != self.lastActiveLayer:
-                    QgsMessageLog.logMessage(f"Layer changed: '{layer.name()} id: {layer.id()}'", tag="AttachmentManager", level=Qgis.Info )
-                    # Disconnect the previously connected layer
-                    if self.lastActiveLayer:
-                        self.lastActiveLayer.selectionChanged.disconnect(self.onSelectionChanged)
-                    # And connect the new layer
-                    layer.selectionChanged.connect(self.onSelectionChanged)
+        if layer and self.dlgActive: 
+            if layer != self.lastActiveLayer:
+                if self.checkLayerOrigin(layer):    
+                    self.layerHasAttachments = self.checkLayerAttachmentTable(layer)
+                    if self.layerHasAttachments:
+                        # Disconnect the previously connected layer
+                        if self.lastActiveLayer:
+                            self.lastActiveLayer.selectionChanged.disconnect(self.onSelectionChanged)
+                        # And connect the new layer
+                        layer.selectionChanged.connect(self.onSelectionChanged, type=Qt.UniqueConnection)
 
-                    self.lastActiveLayer = layer
-            # else:
-            #     # Check if the layer panel contains layers at all
-            #     if len(QgsProject.instance().mapLayers()) > 0:
-            #         msgBox = QMessageBox()
-            #         msgBox.setIcon(QMessageBox.Icon.Warning)
-            #         msgBox.setWindowTitle("Advarsel")
-            #         msgBox.setText("2 Der er ikke valgt et aktivt lag!\n\nVælg venligst et lag, og prøv igen!")
-            #         msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
-            #         msgBox.exec()
+                        self.lastActiveLayer = layer
+                        self.dlg.attachmentLabel.setText(f"Attachments på det valgte objekt på lag '{layer.name()}'")
+                else:
+                    self.dlg.listAttachment.clear()
+
+    def checkLayerOrigin(self, layer):
+        QgsMessageLog.logMessage(f"Checking layer origin! '{layer.name()}'", tag="AttachmentManager", level=Qgis.Info )
+        # Check if layer is from PostGIS
+        if layer.dataProvider().name() != 'postgres':
+            self.dlg.attachmentLabel.setText("Aktivt lag er ikke et PostGIS-lag")
+            showMsgBox("Det valgte lag er ikke et PostGIS-lag!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            self.connParams = None
+            return False
+        
+        self.connParams = parseConnectionString(layer.source())
+        QgsMessageLog.logMessage(f"PostGIS lag -> Connection params: '{self.connParams}'", tag="AttachmentManager", level=Qgis.Info )
+        return True
+    
+    def checkLayerAttachmentTable(self, layer):
+        # Check if layer has an attachment table
+        QgsMessageLog.logMessage(f"Connecting to '{self.connParams['dbname']}' table '{self.connParams['table'][1]}'  on '{self.connParams['host']}'", 'AttachmentManager', level=Qgis.Info)
+        attTable = self.connParams['table'][1] + self.tablePostfix
+        connection = psycopg2.connect(database = self.connParams['dbname'], user = self.connParams['user'], host= self.connParams['host'], password = self.connParams['password'])
+        cursor = connection.cursor()
+        sql = f"""SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = '{self.connParams['table'][0]}'
+            AND table_type = 'BASE TABLE'
+            AND table_name = '{attTable}';"""
+        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        cursor.execute(sql)
+        row = cursor.fetchone()
+    
+        if row != None:
+            QgsMessageLog.logMessage(f"Attachment table '{attTable}' exists!", 'AttachmentManager', level=Qgis.Info)
+            self.findRelationalID(cursor, attTable, self.connParams['table'][0])
+            self.loadAttachmentList(layer)
+            connection.close() 
+            return True
+        else:
+            self.dlg.attachmentLabel.setText(f"Ingen attachments på lag '{layer.name()}'")
+            self.dlg.listAttachment.clear()
+            showMsgBox(f"Det valgte lag har ingen tilknyttede vedhæftningstabeller ('{attTable}' mangler)!\n\nVælg venligst et andet lag, og prøv igen!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            connection.close() 
+            return False
+
+
+    def findRelationalID(self, cursor, attTable, schema):
+        # Find relational field in attachment table
+        cursor.execute(f'SELECT * FROM "{schema}"."{attTable}" LIMIT 0')
+        columns = [desc[0] for desc in cursor.description]
+        self.relationalID = None
+
+        for col in columns:
+            if col.split('_')[0] == self.fieldPrefix:
+                self.relationalID = col
+                break
+        return
 
     def loadAttachmentList(self, layer):
         QgsMessageLog.logMessage(f"Clearing and loading attachment from new selection: {layer.name()}", tag="AttachmentManager", level=Qgis.Info )
+        attTable = self.connParams['table'][1] + self.tablePostfix
+        schema = self.connParams['table'][0]
         self.dlg.listAttachment.clear()
-        self.dlg.listAttachment.addItem("Dummy attachment for selected feature")
         
-    def onSelectionChanged(self):
+        # Find id of currently selected feature
+        selectedFeatures = layer.selectedFeatures()
+
+        if len(selectedFeatures) != 1:  
+            return 
+        self.selectedFeatureID = selectedFeatures[0].id()
+
+        # Connect to database
+        QgsMessageLog.logMessage(f"Loading attachments for feature ID: {self.selectedFeatureID}", tag="AttachmentManager", level=Qgis.Info )
+        connection = psycopg2.connect(database = self.connParams['dbname'], user = self.connParams['user'], host= self.connParams['host'], password = self.connParams['password'])
+        cursor = connection.cursor()
+
+        sql = f'SELECT "{self.fieldSetup['name_field']}" FROM "{schema}"."{attTable}" WHERE "{self.relationalID}" = {self.selectedFeatureID};'
+        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        for row in rows:
+            self.dlg.listAttachment.addItem(row[0])
+
+        if self.dlg.listAttachment.count() > 0: 
+            self.dlg.listAttachment.setCurrentRow(0)
+
+        connection.close() 
+
+        
+    def onSelectionChanged(self, selected_ids, deselected_ids, clear_and_select):
+        # Ignore no-op emissions
+        if not selected_ids and not deselected_ids:
+            return
+
         QgsMessageLog.logMessage(f"Selection changed - number of selected features: {self.lastActiveLayer.selectedFeatureCount()}", tag="AttachmentManager", level=Qgis.Info )
         if self.dlgActive:
             if self.lastActiveLayer.selectedFeatureCount() != 1: 
-                msgBox = QMessageBox()
-                msgBox.setIcon(QMessageBox.Icon.Warning)
-                msgBox.setWindowTitle("Advarsel")
-                msgBox.setText("Vælg ét og kun ét objekt for at få vist vedhæftede filer!")
-                msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
-                msgBox.exec()
+                showMsgBox("Vælg ét og kun ét objekt for at få vist vedhæftede filer!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+                self.dlg.listAttachment.clear()
             else:
                 QgsMessageLog.logMessage(f"Exactly 1 feature selected!", tag="AttachmentManager", level=Qgis.Info )
                 self.loadAttachmentList(self.lastActiveLayer)
 
 
+    def showAttachment(self):
+        QgsMessageLog.logMessage("Show attachment called!", tag="AttachmentManager", level=Qgis.Info )
+
+        # Get file name of selected item
+        item = self.dlg.listAttachment.currentItem()
+        if item == None:
+            showMsgBox("Der er ikke valgt nogen vedhæftning i listen!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            return
+        connection = psycopg2.connect(database = self.connParams['dbname'], user = self.connParams['user'], host= self.connParams['host'], password = self.connParams['password'])
+        cursor = connection.cursor()
+
+        # Retrieve selected attachment from database and save to temporary folder
+        attTable = self.connParams['table'][1] + self.tablePostfix
+        schema = self.connParams['table'][0]
+        sql = f'SELECT "{self.fieldSetup['content_field']}" FROM "{schema}"."{attTable}" WHERE "{self.relationalID}" = {self.selectedFeatureID} AND "{self.fieldSetup['name_field']}" = \'{item.text()}\';'
+        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        cursor.execute(sql)
+        row = cursor.fetchone()
+
+        # Check that we got a result
+        if row == None:
+            showMsgBox("Kunne ikke finde den valgte vedhæftning i databasen!", title="Fejl", icon=QMessageBox.Icon.Critical)
+            connection.close()
+            return
+        
+        fileContent = row[0]
+
+        # Validate content type and non-null/non-empty
+        if fileContent is None or len(fileContent) == 0:
+            showMsgBox("Den valgte vedhæftning er tom!", title="Fejl", icon=QMessageBox.Icon.Critical)
+            connection.close()
+            return
+
+        # psycopg2 may return memoryview for bytea
+        if isinstance(fileContent, memoryview):
+            fileContent = fileContent.tobytes()
+
+        if not isinstance(fileContent, (bytes, bytearray)):
+            showMsgBox("Vedhæftningens indhold er ikke gyldige bytes.", title="Fejl", icon=QMessageBox.Icon.Critical)
+            connection.close()
+            return
+
+        if len(fileContent) == 0:
+            showMsgBox("Vedhæftningens indhold er tomt (0 bytes).", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            connection.close()
+            return
+
+        # Check temp folder
+        if not os.path.exists(self.tempFolder.name):
+            QgsMessageLog.logMessage(f"Kunne ikke finde midlertidig mappe: {self.tempFolder.name}", 'AttachmentManager', level=Qgis.Critical)
+            showMsgBox("Kunne ikke tilgå midlertidig mappe til filen", title="Fejl", icon=QMessageBox.Icon.Critical)
+            connection.close()
+            return
+
+        # Store file in temporary folder
+        tempFilePath = os.path.join(self.tempFolder.name, item.text())
+
+        # Write and verify bytes written
+        try:
+            with open(tempFilePath, 'wb') as f:
+                written = f.write(fileContent)
+            if written != len(fileContent):
+                raise IOError(f"Kun {written} af {len(fileContent)} bytes blev skrevet.")
+        except Exception as e:
+            QgsMessageLog.logMessage(f"Fejl ved skrivning af fil: {e}", 'AttachmentManager', level=Qgis.Critical)
+            showMsgBox("Fejl ved skrivning af filen til disk.", title="Fejl", icon=QMessageBox.Icon.Critical)
+            connection.close()
+            return
+
+        # Show file in default application
+        QgsMessageLog.logMessage(f"Opening temp file: '{tempFilePath}'", tag="AttachmentManager", level=Qgis.Info )
+        connection.close()
+
+        # If we are running Windows
+        if sys.platform.startswith("win"):
+            os.startfile(tempFilePath)
+        # macOS
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.run(["open", tempFilePath], check=False)
+        # Linux / others
+        else:
+            # Try QDesktopServices first (better with sandboxed envs)
+            if not QDesktopServices.openUrl(QUrl.fromLocalFile(tempFilePath)):
+                import subprocess
+                subprocess.run(["xdg-open", tempFilePath], check=False)
+
+    def addAttachment(self):
+        QgsMessageLog.logMessage("Add attachment called!", tag="AttachmentManager", level=Qgis.Info )
+        # Ask user to choose file to be added
+        fileDialog = QFileDialog()
+        fileDialog.setFileMode(QFileDialog.FileMode.ExistingFile)
+        if fileDialog.exec():
+            selectedFiles = fileDialog.selectedFiles()
+            if len(selectedFiles) != 1:
+                showMsgBox("Vælg én og kun én fil at vedhæfte!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+                return
+            selectedFilePath = selectedFiles[0]
+            QgsMessageLog.logMessage(f"Selected file to be attached: '{selectedFilePath}'", tag="AttachmentManager", level=Qgis.Info )
+        else:
+            return
+                    
+        # Establish connection to database
+        connection = psycopg2.connect(database = self.connParams['dbname'], user = self.connParams['user'], host= self.connParams['host'], password = self.connParams['password'])
+        cursor = connection.cursor()
+
+        # Store file as new attachment in database
+        attTable = self.connParams['table'][1] + self.tablePostfix
+        schema = self.connParams['table'][0]
+        fileData = self.getFileData(selectedFilePath)
+        sql = f"INSERT INTO \"{schema}\".\"{attTable}\" (\"{self.fieldSetup['id_field']}\", \"{self.fieldSetup['name_field']}\", \"{self.fieldSetup['content_field']}\", \"{self.relationalID}\") VALUES ('{str(uuid.uuid1())}','{os.path.basename(selectedFilePath)}',{Binary(fileData)},{self.selectedFeatureID});"
+        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        cursor.execute(sql)
+        connection.commit()
+        connection.close()
+        self.loadAttachmentList(self.lastActiveLayer)
+
+    def deleteAttachment(self):
+        QgsMessageLog.logMessage("Delete attachment called!", tag="AttachmentManager", level=Qgis.Info )
+
+        # Get file name of selected item
+        item = self.dlg.listAttachment.currentItem()
+        if item == None:
+            showMsgBox("Der er ikke valgt nogen vedhæftning i listen!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            return
+        connection = psycopg2.connect(database = self.connParams['dbname'], user = self.connParams['user'], host= self.connParams['host'], password = self.connParams['password'])
+        cursor = connection.cursor()
+
+        # Retrieve selected attachment from database and save to temporary folder
+        attTable = self.connParams['table'][1] + self.tablePostfix
+        schema = self.connParams['table'][0]
+        sql = f'DELETE FROM "{schema}"."{attTable}" WHERE "{self.relationalID}" = {self.selectedFeatureID} AND "{self.fieldSetup['name_field']}" = \'{item.text()}\';'
+        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        cursor.execute(sql)
+        connection.commit()
+        connection.close()
+        self.loadAttachmentList(self.lastActiveLayer)
+
+    def getFileData(self, filePath):
+        with open(filePath, 'rb') as f:
+            data = f.read()
+        return data
 
 
-def parseConnectionString(s):
-    pattern = re.compile(r'(\w+)=(".*?"|\'.*?\'|\S+)')
-    matches = pattern.findall(s)
-    return {key: value.strip('\'"') for key, value in matches}
+
+def showMsgBox(message, title="Info", icon=QMessageBox.Icon.Information):
+    msgBox = QMessageBox()
+    msgBox.setIcon(icon)
+    msgBox.setWindowTitle(title)
+    msgBox.setText(message)
+    msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
+    msgBox.exec()
+
+
+def parseConnectionString(conn_str: str) -> dict:
+    """
+    Parse key=value pairs from a connection string and:
+      - Ignore a trailing parenthesized section outside quotes (e.g., '(wkb_geometry)').
+      - Return values as strings, EXCEPT dot-connected identifiers (e.g., "public"."fj_muffe")
+        which are converted to ['public', 'fj_muffe'].
+    """
+
+    # --- Helpers --------------------------------------------------------------
+
+    def strip_parenthesized_section(s: str) -> str:
+        """Remove the first '(' ... ')' section found outside quotes."""
+        in_single = False
+        in_double = False
+        depth = 0
+        start = None
+        for i, ch in enumerate(s):
+            if ch == "'" and not in_double:
+                in_single = not in_single
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+            elif ch == '(' and not in_single and not in_double:
+                # On first opening outside quotes: truncate from here
+                return s[:i].rstrip()
+        return s.strip()
+
+    def unescape_and_unquote(value: str) -> str:
+        """Unescape backslash-escaped quotes and strip surrounding quotes if any."""
+        v = value.replace(r"\'", "'").replace(r'\"', '"')
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in ("'", '"'):
+            v = v[1:-1]
+        return v
+
+    def split_dotted_identifiers(raw: str):
+        """
+        Split a string like:
+          "public"."fj_muffe"  -> ['public', 'fj_muffe']
+          'schema'."table"     -> ['schema', 'table']
+          public.table         -> ['public', 'table']
+          "a.b"."c.d"          -> ['a.b', 'c.d']  (dots inside quotes are preserved)
+        Returns a list if there's at least one dot outside quotes; otherwise None.
+        """
+        s = raw.strip()
+        # Detect a dot outside quotes
+        in_single = in_double = False
+        has_dot_outside = False
+        for ch in s:
+            if ch == "'" and not in_double:
+                in_single = not in_single
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+            elif ch == '.' and not in_single and not in_double:
+                has_dot_outside = True
+                break
+        if not has_dot_outside:
+            return None
+
+        parts, buf = [], []
+        in_single = in_double = False
+        for ch in s:
+            if ch == "'" and not in_double:
+                in_single = not in_single
+                buf.append(ch)
+            elif ch == '"' and not in_single:
+                in_double = not in_double
+                buf.append(ch)
+            elif ch == '.' and not in_single and not in_double:
+                parts.append(''.join(buf).strip())
+                buf = []
+            else:
+                buf.append(ch)
+        if buf:
+            parts.append(''.join(buf).strip())
+
+        cleaned = []
+        for p in parts:
+            q = p.replace(r"\'", "'").replace(r'\"', '"')
+            if len(q) >= 2 and q[0] == q[-1] and q[0] in ("'", '"'):
+                q = q[1:-1]
+            cleaned.append(q)
+        return cleaned
+
+    def scan_pairs(s: str):
+        """
+        Tokenize into (key, value) pairs where:
+          - key = \w+
+          - '=' follows immediately
+          - value continues until next whitespace outside quotes (or end)
+        This allows values like: "public"."fj_muffe" or public.table
+        """
+        i, n = 0, len(s)
+        result = []
+        while i < n:
+            # Skip spaces
+            while i < n and s[i].isspace():
+                i += 1
+            if i >= n:
+                break
+
+            # Parse key
+            start = i
+            while i < n and (s[i].isalnum() or s[i] == '_'):
+                i += 1
+            if i == start:
+                # Not a key; bail
+                break
+            key = s[start:i]
+
+            # Expect '='
+            if i >= n or s[i] != '=':
+                # malformed; skip to next space
+                while i < n and not s[i].isspace():
+                    i += 1
+                continue
+            i += 1  # skip '='
+
+            # Parse value until next space outside quotes
+            in_single = in_double = False
+            val_buf = []
+            while i < n:
+                ch = s[i]
+                if ch == "'" and not in_double:
+                    in_single = not in_single
+                    val_buf.append(ch)
+                    i += 1
+                elif ch == '"' and not in_single:
+                    in_double = not in_double
+                    val_buf.append(ch)
+                    i += 1
+                elif ch.isspace() and not in_single and not in_double:
+                    break
+                else:
+                    val_buf.append(ch)
+                    i += 1
+            value = ''.join(val_buf).strip()
+            result.append((key, value))
+            # loop continues; next iteration will skip spaces
+        return result
+
+    # --- Parse ---------------------------------------------------------------
+
+    cleaned = strip_parenthesized_section(conn_str)
+    pairs = scan_pairs(cleaned)
+
+    result = {}
+    for key, value_str in pairs:
+        # Try dotted-identifiers -> list
+        dotted = split_dotted_identifiers(value_str)
+        if dotted is not None:
+            result[key] = dotted
+        else:
+            result[key] = unescape_and_unquote(value_str)
+
+    return result
+

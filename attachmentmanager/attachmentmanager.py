@@ -55,12 +55,15 @@ class AttachmentManager:
         locale_path = os.path.join(
             self.plugin_dir,
             'i18n',
-            'AttachmentManager_{}.qm'.format(locale))
+            'attachmentmanager_{}.qm'.format(locale))
 
         if os.path.exists(locale_path):
             self.translator = QTranslator()
             self.translator.load(locale_path)
             QCoreApplication.installTranslator(self.translator)
+            QgsMessageLog.logMessage(f"Locale set to: '{locale}'", tag="AttachmentManager", level=Qgis.Info )
+        else:
+            QgsMessageLog.logMessage(f"Locale file not found for: '{locale}'", tag="AttachmentManager", level=Qgis.Info )
 
         # Declare instance attributes
         self.actions = []
@@ -107,7 +110,10 @@ class AttachmentManager:
         :rtype: QString
         """
         # noinspection PyTypeChecker,PyArgumentList,PyCallByClass
-        return QCoreApplication.translate('AttachmentManager', message)
+        #return QCoreApplication.translate('AttachmentManager', message)
+        translation = QCoreApplication.translate('AttachmentManager', message)
+        QgsMessageLog.logMessage(f"Translating message: '{message}' -> '{translation}'", tag="AttachmentManager", level=Qgis.Info )
+        return translation
 
 
     def add_action(
@@ -271,7 +277,10 @@ class AttachmentManager:
 
         # Get active layer
         activeLayer = self.iface.activeLayer()
-        QgsMessageLog.logMessage(f"Active layer: '{activeLayer.name()}'", tag="AttachmentManager", level=Qgis.Info )
+        if activeLayer:
+            QgsMessageLog.logMessage(f"Active layer: '{activeLayer.name()}'", tag="AttachmentManager", level=Qgis.Info )
+        else:
+            QgsMessageLog.logMessage("No active layer", tag="AttachmentManager", level=Qgis.Info )
         # Disconnect lastActiveLayer if appropriate
         if self.lastActiveLayer and self.lastActiveLayer.receivers(self.lastActiveLayer.selectionChanged) > 0:
             self.lastActiveLayer.selectionChanged.disconnect(self.onSelectionChanged)
@@ -281,7 +290,7 @@ class AttachmentManager:
             if self.checkLayerOrigin(activeLayer):    
                 self.layerHasAttachments = self.checkLayerAttachmentTable(activeLayer)
                 self.lastActiveLayer = activeLayer
-                self.dlg.attachmentLabel.setText(f"Attachments på det valgte objekt på lag '{activeLayer.name()}'")
+                self.dlg.attachmentLabel.setText(self.tr(f"Attachments on the selected feature on layer '{activeLayer.name()}'"))
                 # Connect to selection changed signal 
                 activeLayer.selectionChanged.connect(self.onSelectionChanged, type=Qt.UniqueConnection)
 
@@ -296,8 +305,8 @@ class AttachmentManager:
                 # substitute with your code.
                 pass
         elif self.dlgActive:
-            self.dlg.attachmentLabel.setText("Intet aktivt lag valgt")
-            showMsgBox("Der er ikke valgt et aktivt lag!\n\nVælg venligst et lag, og prøv igen!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            self.dlg.attachmentLabel.setText(self.tr("No active layer selected"))
+            showMsgBox(self.tr("You have not selected an active layer!\n\nPlease select a layer and try again!"), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
 
     
     def onActiveLayerChanged(self, layer):
@@ -315,7 +324,7 @@ class AttachmentManager:
                         layer.selectionChanged.connect(self.onSelectionChanged, type=Qt.UniqueConnection)
 
                         self.lastActiveLayer = layer
-                        self.dlg.attachmentLabel.setText(f"Attachments på det valgte objekt på lag '{layer.name()}'")
+                        self.dlg.attachmentLabel.setText(self.tr(f"Attachments on the selected feature on layer '{layer.name()}'"))
                 else:
                     self.dlg.listAttachment.clear()
 
@@ -323,8 +332,8 @@ class AttachmentManager:
         QgsMessageLog.logMessage(f"Checking layer origin! '{layer.name()}'", tag="AttachmentManager", level=Qgis.Info )
         # Check if layer is from PostGIS
         if layer.dataProvider().name() != 'postgres':
-            self.dlg.attachmentLabel.setText("Aktivt lag er ikke et PostGIS-lag")
-            showMsgBox("Det valgte lag er ikke et PostGIS-lag!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            self.dlg.attachmentLabel.setText(self.tr("Active layer is not a PostGIS layer"))
+            showMsgBox(self.tr("The selected layer is not a PostGIS layer!"), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
             self.connParams = None
             return False
         
@@ -349,15 +358,19 @@ class AttachmentManager:
     
         if row != None:
             QgsMessageLog.logMessage(f"Attachment table '{attTable}' exists!", 'AttachmentManager', level=Qgis.Info)
+            self.dlg.attachmentLabel.setText(self.tr(f"Attachments on the selected feature on layer '{layer.name()}'"))
             self.findRelationalID(cursor, attTable, self.connParams['table'][0])
             self.loadAttachmentList(layer)
             connection.close() 
+            self.dlg.btnSetupAttachments.setEnabled(False)  # Disable setup button if table exists
             return True
         else:
-            self.dlg.attachmentLabel.setText(f"Ingen attachments på lag '{layer.name()}'")
+            QgsMessageLog.logMessage(f"No attachment table on layer '{layer.name()}'", 'AttachmentManager', level=Qgis.Info)
+            self.dlg.attachmentLabel.setText(self.tr(f"No attachments on layer '{layer.name()}'"))
             self.dlg.listAttachment.clear()
-            showMsgBox(f"Det valgte lag har ingen tilknyttede vedhæftningstabeller ('{attTable}' mangler)!\n\nVælg venligst et andet lag, og prøv igen!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            showMsgBox(self.tr(f"The selected layer has no associated attachment table ('{attTable}' is missing)!\n\nCreate an attachment table or select another layer!"), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
             connection.close() 
+            self.dlg.btnSetupAttachments.setEnabled(True)  # Enable setup button if table is missing
             return False
 
 
@@ -412,7 +425,7 @@ class AttachmentManager:
         QgsMessageLog.logMessage(f"Selection changed - number of selected features: {self.lastActiveLayer.selectedFeatureCount()}", tag="AttachmentManager", level=Qgis.Info )
         if self.dlgActive:
             if self.lastActiveLayer.selectedFeatureCount() != 1: 
-                showMsgBox("Vælg ét og kun ét objekt for at få vist vedhæftede filer!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+                showMsgBox(self.tr("Select exactly one feature to view attachments!"), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
                 self.dlg.listAttachment.clear()
             else:
                 QgsMessageLog.logMessage(f"Exactly 1 feature selected!", tag="AttachmentManager", level=Qgis.Info )
@@ -425,7 +438,7 @@ class AttachmentManager:
         # Get file name of selected item
         item = self.dlg.listAttachment.currentItem()
         if item == None:
-            showMsgBox("Der er ikke valgt nogen vedhæftning i listen!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            showMsgBox(self.tr("No attachment selected in the list!"), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
             return
         connection = psycopg2.connect(database = self.connParams['dbname'], user = self.connParams['user'], host= self.connParams['host'], password = self.connParams['password'])
         cursor = connection.cursor()
@@ -440,7 +453,7 @@ class AttachmentManager:
 
         # Check that we got a result
         if row == None:
-            showMsgBox("Kunne ikke finde den valgte vedhæftning i databasen!", title="Fejl", icon=QMessageBox.Icon.Critical)
+            showMsgBox(self.tr("Could not find the selected attachment in the database!"), title=self.tr("Error"), icon=QMessageBox.Icon.Critical)
             connection.close()
             return
         
@@ -448,7 +461,7 @@ class AttachmentManager:
 
         # Validate content type and non-null/non-empty
         if fileContent is None or len(fileContent) == 0:
-            showMsgBox("Den valgte vedhæftning er tom!", title="Fejl", icon=QMessageBox.Icon.Critical)
+            showMsgBox(self.tr("The selected attachment is empty!"), title=self.tr("Error"), icon=QMessageBox.Icon.Critical)
             connection.close()
             return
 
@@ -457,19 +470,19 @@ class AttachmentManager:
             fileContent = fileContent.tobytes()
 
         if not isinstance(fileContent, (bytes, bytearray)):
-            showMsgBox("Vedhæftningens indhold er ikke gyldige bytes.", title="Fejl", icon=QMessageBox.Icon.Critical)
+            showMsgBox(self.tr("Attachment content is not valid"), title=self.tr("Error"), icon=QMessageBox.Icon.Critical)
             connection.close()
             return
 
         if len(fileContent) == 0:
-            showMsgBox("Vedhæftningens indhold er tomt (0 bytes).", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            showMsgBox(self.tr("The selected attachment is empty (0 bytes)."), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
             connection.close()
             return
 
         # Check temp folder
         if not os.path.exists(self.tempFolder.name):
-            QgsMessageLog.logMessage(f"Kunne ikke finde midlertidig mappe: {self.tempFolder.name}", 'AttachmentManager', level=Qgis.Critical)
-            showMsgBox("Kunne ikke tilgå midlertidig mappe til filen", title="Fejl", icon=QMessageBox.Icon.Critical)
+            QgsMessageLog.logMessage(f"Could not access temporary folder: {self.tempFolder.name}", 'AttachmentManager', level=Qgis.Critical)
+            showMsgBox(self.tr("Could not access temporary folder for the file"), title=self.tr("Error"), icon=QMessageBox.Icon.Critical)
             connection.close()
             return
 
@@ -481,10 +494,10 @@ class AttachmentManager:
             with open(tempFilePath, 'wb') as f:
                 written = f.write(fileContent)
             if written != len(fileContent):
-                raise IOError(f"Kun {written} af {len(fileContent)} bytes blev skrevet.")
+                raise IOError(self.tr(f"Only {written} of {len(fileContent)} bytes were written."))
         except Exception as e:
-            QgsMessageLog.logMessage(f"Fejl ved skrivning af fil: {e}", 'AttachmentManager', level=Qgis.Critical)
-            showMsgBox("Fejl ved skrivning af filen til disk.", title="Fejl", icon=QMessageBox.Icon.Critical)
+            QgsMessageLog.logMessage(f"Error writing file to disk: {e}", 'AttachmentManager', level=Qgis.Critical)
+            showMsgBox(self.tr("Error writing file to disk."), title=self.tr("Error"), icon=QMessageBox.Icon.Critical)
             connection.close()
             return
 
@@ -508,13 +521,18 @@ class AttachmentManager:
 
     def addAttachment(self):
         QgsMessageLog.logMessage("Add attachment called!", tag="AttachmentManager", level=Qgis.Info )
+
+        if len(self.lastActiveLayer.selectedFeatures()) != 1:  
+            showMsgBox(self.tr("Choose exactly one feature to add attachments to!"), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
+            return 
+
         # Ask user to choose file to be added
         fileDialog = QFileDialog()
         fileDialog.setFileMode(QFileDialog.FileMode.ExistingFile)
         if fileDialog.exec():
             selectedFiles = fileDialog.selectedFiles()
             if len(selectedFiles) != 1:
-                showMsgBox("Vælg én og kun én fil at vedhæfte!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+                showMsgBox(self.tr("Choose exactly one file to attach!"), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
                 return
             selectedFilePath = selectedFiles[0]
             QgsMessageLog.logMessage(f"Selected file to be attached: '{selectedFilePath}'", tag="AttachmentManager", level=Qgis.Info )
@@ -530,7 +548,7 @@ class AttachmentManager:
         schema = self.connParams['table'][0]
         fileData = self.getFileData(selectedFilePath)
         sql = f"INSERT INTO \"{schema}\".\"{attTable}\" (\"{self.fieldSetup['id_field']}\", \"{self.fieldSetup['name_field']}\", \"{self.fieldSetup['content_field']}\", \"{self.relationalID}\") VALUES ('{str(uuid.uuid1())}','{os.path.basename(selectedFilePath)}',{Binary(fileData)},{self.selectedFeatureID});"
-        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        #QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
         cursor.execute(sql)
         connection.commit()
         connection.close()
@@ -542,7 +560,7 @@ class AttachmentManager:
         # Get file name of selected item
         item = self.dlg.listAttachment.currentItem()
         if item == None:
-            showMsgBox("Der er ikke valgt nogen vedhæftning i listen!", title="Advarsel", icon=QMessageBox.Icon.Warning)
+            showMsgBox(self.tr("No attachment selected in the list!"), title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
             return
         connection = psycopg2.connect(database = self.connParams['dbname'], user = self.connParams['user'], host= self.connParams['host'], password = self.connParams['password'])
         cursor = connection.cursor()
@@ -562,15 +580,50 @@ class AttachmentManager:
             data = f.read()
         return data
 
+    def setupAttachmentTable(self):
+        layer = self.iface.activeLayer()
+        if showMsgBox(self.tr(f"Are you sure you want to create an attachment table for layer '{layer.name()}'?\n\nThis will create a new table in the database!"), 
+                      title=self.tr("Confirmation"), 
+                      icon=QMessageBox.Icon.Warning, 
+                      buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == True:
+            QgsMessageLog.logMessage("Setup attachment table called!", tag="AttachmentManager", level=Qgis.Info )
 
+            # Establish connection to database
+            connection = psycopg2.connect(database = self.connParams['dbname'], user = self.connParams['user'], host= self.connParams['host'], password = self.connParams['password'])
+            cursor = connection.cursor()
 
-def showMsgBox(message, title="Info", icon=QMessageBox.Icon.Information):
+            attTable = self.connParams['table'][1] + self.tablePostfix
+            schema = self.connParams['table'][0]
+
+            # Create attachment table
+            sql = f'''CREATE TABLE "{schema}"."{attTable}" (
+                "{self.fieldSetup['id_field']}" UUID PRIMARY KEY,
+                "{self.fieldSetup['name_field']}" VARCHAR(255) NOT NULL,
+                "{self.fieldSetup['content_field']}" BYTEA NOT NULL,
+                "{self.relationalID}" INTEGER NOT NULL
+            );'''
+            QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+            cursor.execute(sql)
+            connection.commit()
+            connection.close()
+            showMsgBox(self.tr(f"Attachment table '{attTable}' created successfully!"), title=self.tr("Info"), icon=QMessageBox.Icon.Information)
+            self.onActiveLayerChanged(layer)
+            self.dlg.btnSetupAttachments.enabled = False  # Disable setup button after creating table
+
+### === End of AttachmentManager class === ###
+
+def showMsgBox(message, title="Info", icon=QMessageBox.Icon.Information, buttons=QMessageBox.StandardButton.Ok):
     msgBox = QMessageBox()
     msgBox.setIcon(icon)
     msgBox.setWindowTitle(title)
     msgBox.setText(message)
-    msgBox.setStandardButtons(QMessageBox.StandardButton.Ok)
-    msgBox.exec()
+    msgBox.setStandardButtons(buttons)
+    result = msgBox.exec()
+    
+    if result == QMessageBox.Yes:
+        return True
+    else:
+        return False
 
 
 def parseConnectionString(conn_str: str) -> dict:

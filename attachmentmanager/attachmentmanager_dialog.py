@@ -48,6 +48,8 @@ class AttachmentManagerDialog(QtWidgets.QDialog, FORM_CLASS):
         
         # Connect the close button to the function doing this
         self.btnClose.clicked.connect(self.closeDlg)
+        self.btnSetupAttachments.clicked.connect(self.plugin.setupAttachmentTable)
+        self.btnSetupAttachments.setEnabled(False)  # Initially disable the setup button  
 
 
     def closeDlg(self):

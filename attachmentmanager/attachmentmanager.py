@@ -41,8 +41,11 @@
 # stable aliases that the rest of the module uses.
 # ---------------------------------------------------------------------------
 try:
-    from qgis.PyQt.QtCore import PYQT_VERSION_STR as _PYQT_VERSION_STR  # type: ignore
-    _QT_MAJOR = int(_PYQT_VERSION_STR.split(".")[0])
+    # qVersion() returns Qt's own runtime version string (e.g. "5.15.3" or "6.5.2").
+    # Using it is more reliable than PYQT_VERSION_STR, which reflects the PyQt
+    # binding version and can differ from the underlying Qt major version.
+    from qgis.PyQt.QtCore import qVersion as _qVersion  # type: ignore
+    _QT_MAJOR = int(_qVersion().split(".")[0])
 except Exception:
     _QT_MAJOR = 5  # safe fallback
 
@@ -247,8 +250,8 @@ class AttachmentManager:
             if self.checkLayerOrigin(activeLayer):
                 self.layerHasAttachments = self.checkLayerAttachmentTable(activeLayer)
                 self.lastActiveLayer = activeLayer
-                self.dlg.attachmentLabel.setText(
-                    self.tr(f"Attachments on the selected feature on layer '{activeLayer.name()}'"))
+                text = self.tr("Attachments on the selected feature on layer")
+                self.dlg.attachmentLabel.setText(f"{text} '{activeLayer.name()}'")
                 activeLayer.selectionChanged.connect(
                     self.onSelectionChanged, type=_UniqueConnection)
             self.dlg.show()
@@ -277,8 +280,8 @@ class AttachmentManager:
                         layer.selectionChanged.connect(
                             self.onSelectionChanged, type=_UniqueConnection)
                         self.lastActiveLayer = layer
-                        self.dlg.attachmentLabel.setText(
-                            self.tr(f"Attachments on the selected feature on layer '{layer.name()}'"))
+                        text = self.tr("Attachments on the selected feature on layer")
+                        self.dlg.attachmentLabel.setText(f"{text} '{layer.name()}'")
                 else:
                     self.dlg.listAttachment.clear()
 
@@ -317,8 +320,8 @@ class AttachmentManager:
         if row is not None:
             QgsMessageLog.logMessage(
                 f"Attachment table '{attTable}' exists!", 'AttachmentManager', level=Qgis.Info)
-            self.dlg.attachmentLabel.setText(
-                self.tr(f"Attachments on the selected feature on layer '{layer.name()}'"))
+            text = self.tr("Attachments on the selected feature on layer")
+            self.dlg.attachmentLabel.setText((f"{text} '{layer.name()}'"))
             self.findRelationalID(cursor, attTable, self.connParams['table'][0])
             self.loadAttachmentList(layer)
             connection.close()
@@ -327,11 +330,12 @@ class AttachmentManager:
         else:
             QgsMessageLog.logMessage(
                 f"No attachment table on layer '{layer.name()}'", 'AttachmentManager', level=Qgis.Info)
-            self.dlg.attachmentLabel.setText(self.tr(f"No attachments on layer '{layer.name()}'"))
+            text = self.tr("No attachments on layer")
+            self.dlg.attachmentLabel.setText(f"{text} '{layer.name()}'")
             self.dlg.listAttachment.clear()
-            showMsgBox(
-                self.tr(f"The selected layer has no associated attachment table "
-                        f"('{attTable}' is missing)!\n\nCreate an attachment table or select another layer!"),
+            text1 = self.tr("The selected layer has no associated attachment table\n(")
+            text2 = self.tr("is missing)!\n\nCreate an attachment table or select another layer!")
+            showMsgBox(f"{text1}'{attTable}'{text2}",
                 title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
             connection.close()
             self.dlg.btnSetupAttachments.setEnabled(True)
@@ -546,9 +550,10 @@ class AttachmentManager:
 
     def setupAttachmentTable(self):
         layer = self.iface.activeLayer()
+        text1 = self.tr("Are you sure you want to create an attachment table for layer")
+        text2 = self.tr("This will create a new table in the database!")
         if showMsgBox(
-                self.tr(f"Are you sure you want to create an attachment table for layer '{layer.name()}'?"
-                        f"\n\nThis will create a new table in the database!"),
+                f"{text1} '{layer.name()}'?\n\n{text2}",
                 title=self.tr("Confirmation"),
                 icon=QMessageBox.Icon.Warning,
                 buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == True:
@@ -569,8 +574,10 @@ class AttachmentManager:
             cursor.execute(sql)
             connection.commit()
             connection.close()
+            text1 = self.tr("Attachment table")
+            text2 = self.tr("created successfully!")
             showMsgBox(
-                self.tr(f"Attachment table '{attTable}' created successfully!"),
+                f"{text1} '{attTable}' {text2}",
                 title=self.tr("Info"), icon=QMessageBox.Icon.Information)
             self.onActiveLayerChanged(layer)
             self.dlg.btnSetupAttachments.setEnabled(False)

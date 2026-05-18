@@ -3,6 +3,7 @@
 # Resource object code
 #
 # Created by: The Resource Compiler for PyQt5 (Qt v5.15.13)
+# Updated for Qt5/Qt6 compatibility (QGIS 3.x and 4.x)
 #
 # WARNING! All changes made in this file will be lost!
 

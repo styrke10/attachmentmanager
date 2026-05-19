@@ -2,190 +2,172 @@
 <!DOCTYPE TS>
 <TS version="2.1">
 <context>
+    <name>@default</name>
+    <message>
+        <location filename="../attachmentmanager.py" line="697"/>
+        <source>About</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../attachmentmanager.py" line="697"/>
+        <source>AttachmentManager</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../attachmentmanager.py" line="700"/>
+        <source>The plugin &apos;AttachmentManager&apos; was developed by &lt;a href=</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
     <name>AttachmentManager</name>
     <message>
-        <location filename="../attachmentmanager.py" line="308"/>
+        <location filename="../attachmentmanager.py" line="267"/>
         <source>No active layer selected</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="563"/>
+        <location filename="../attachmentmanager.py" line="531"/>
         <source>Warning</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="335"/>
+        <location filename="../attachmentmanager.py" line="295"/>
         <source>Active layer is not a PostGIS layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="336"/>
+        <location filename="../attachmentmanager.py" line="296"/>
         <source>The selected layer is not a PostGIS layer!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="428"/>
+        <location filename="../attachmentmanager.py" line="392"/>
         <source>Select exactly one feature to view attachments!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="563"/>
+        <location filename="../attachmentmanager.py" line="531"/>
         <source>No attachment selected in the list!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="456"/>
+        <location filename="../attachmentmanager.py" line="424"/>
         <source>Could not find the selected attachment in the database!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="500"/>
+        <location filename="../attachmentmanager.py" line="469"/>
         <source>Error</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="464"/>
+        <location filename="../attachmentmanager.py" line="431"/>
         <source>The selected attachment is empty!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="473"/>
+        <location filename="../attachmentmanager.py" line="440"/>
         <source>Attachment content is not valid</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="478"/>
+        <location filename="../attachmentmanager.py" line="446"/>
         <source>The selected attachment is empty (0 bytes).</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="485"/>
+        <location filename="../attachmentmanager.py" line="455"/>
         <source>Could not access temporary folder for the file</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="500"/>
+        <location filename="../attachmentmanager.py" line="469"/>
         <source>Error writing file to disk.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="526"/>
+        <location filename="../attachmentmanager.py" line="491"/>
         <source>Choose exactly one feature to add attachments to!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="535"/>
+        <location filename="../attachmentmanager.py" line="500"/>
         <source>Choose exactly one file to attach!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="585"/>
+        <location filename="../attachmentmanager.py" line="558"/>
         <source>Confirmation</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="609"/>
+        <location filename="../attachmentmanager.py" line="582"/>
         <source>Info</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="309"/>
+        <location filename="../attachmentmanager.py" line="268"/>
         <source>You have not selected an active layer!
 
 Please select a layer and try again!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="217"/>
+        <location filename="../attachmentmanager.py" line="190"/>
         <source>&amp;AttachmentManager</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="197"/>
+        <location filename="../attachmentmanager.py" line="177"/>
         <source>AttachmentManager</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="293"/>
-        <source>Attachments on the selected feature on layer &apos;{activeLayer.name()}&apos;</source>
+        <location filename="../attachmentmanager.py" line="326"/>
+        <source>Attachments on the selected feature on layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="361"/>
-        <source>Attachments on the selected feature on layer &apos;{layer.name()}&apos;</source>
+        <location filename="../attachmentmanager.py" line="336"/>
+        <source>No attachments on layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="369"/>
-        <source>No attachments on layer &apos;{layer.name()}&apos;</source>
+        <location filename="../attachmentmanager.py" line="339"/>
+        <source>The selected layer has no associated attachment table
+(</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="371"/>
-        <source>The selected layer has no associated attachment table (&apos;{attTable}&apos; is missing)!
+        <location filename="../attachmentmanager.py" line="340"/>
+        <source>is missing)!
 
 Create an attachment table or select another layer!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="497"/>
-        <source>Only {written} of {len(fileContent)} bytes were written.</source>
+        <location filename="../attachmentmanager.py" line="556"/>
+        <source>Are you sure you want to create an attachment table for layer</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="585"/>
-        <source>Are you sure you want to create an attachment table for layer &apos;{layer.name()}&apos;?
-
-This will create a new table in the database!</source>
+        <location filename="../attachmentmanager.py" line="557"/>
+        <source>This will create a new table in the database!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../attachmentmanager.py" line="609"/>
-        <source>Attachment table &apos;{attTable}&apos; created successfully!</source>
+        <location filename="../attachmentmanager.py" line="580"/>
+        <source>Attachment table</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../attachmentmanager.py" line="581"/>
+        <source>created successfully!</source>
         <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>Dialog</name>
-    <message>
-        <location filename="../attachmentmanager_dialog_base.ui" line="14"/>
-        <source>AttachmentManager</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../attachmentmanager_dialog_base.ui" line="26"/>
-        <source>Show</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../attachmentmanager_dialog_base.ui" line="39"/>
-        <source>Add</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../attachmentmanager_dialog_base.ui" line="52"/>
-        <source>Delete</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../attachmentmanager_dialog_base.ui" line="65"/>
-        <source>Close</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../attachmentmanager_dialog_base.ui" line="81"/>
-        <source>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;Developed by &lt;a href=&quot;https://styrke10.dk&quot;&gt;&lt;span style=&quot; text-decoration: underline; color:#0000ff;&quot;&gt;Styrke 10 ApS&lt;/span&gt;&lt;/a&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../attachmentmanager_dialog_base.ui" line="112"/>
-        <source>Attachments on the selected feature:</source>
-        <translation type="unfinished"></translation>
-    </message>
-    <message>
-        <location filename="../attachmentmanager_dialog_base.ui" line="125"/>
-        <source>Create attachment table</source>
-        <translation type="unfinished"></translation>
-    </message>
 </context>
 </TS>

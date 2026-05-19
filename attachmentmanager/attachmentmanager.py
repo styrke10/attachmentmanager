@@ -144,9 +144,9 @@ class AttachmentManager:
     def tr(self, message):
         """Qt translation helper (we do not inherit QObject)."""
         translation = QCoreApplication.translate('AttachmentManager', message)
-        QgsMessageLog.logMessage(
-            f"Translating message: '{message}' -> '{translation}'",
-            tag="AttachmentManager", level=Qgis.Info)
+        #QgsMessageLog.logMessage(
+        #    f"Translating message: '{message}' -> '{translation}'",
+        #    tag="AttachmentManager", level=Qgis.Info)
         return translation
 
     def add_action(self, icon_path, text, callback, enabled_flag=True,
@@ -224,8 +224,6 @@ class AttachmentManager:
 
     def run(self):
         """Run method that performs all the real work."""
-        QgsMessageLog.logMessage("Calling run()", tag="AttachmentManager", level=Qgis.Info)
-
         if self.first_start == True:
             self.first_start = False
             self.dlg = AttachmentManagerDialog(parent=self.iface.mainWindow(), plugin=self)
@@ -234,13 +232,14 @@ class AttachmentManager:
             self.dlg.btnAttachAdd.clicked.connect(self.addAttachment)
             self.dlg.btnAttachDelete.clicked.connect(self.deleteAttachment)
             self.dlg.listAttachment.doubleClicked.connect(self.showAttachment)
+            self.dlg.btnAbout.clicked.connect(self._onAbout)
 
         activeLayer = self.iface.activeLayer()
-        if activeLayer:
-            QgsMessageLog.logMessage(
-                f"Active layer: '{activeLayer.name()}'", tag="AttachmentManager", level=Qgis.Info)
-        else:
-            QgsMessageLog.logMessage("No active layer", tag="AttachmentManager", level=Qgis.Info)
+        # if activeLayer:
+        #     QgsMessageLog.logMessage(
+        #         f"Active layer: '{activeLayer.name()}'", tag="AttachmentManager", level=Qgis.Info)
+        # else:
+        #     QgsMessageLog.logMessage("No active layer", tag="AttachmentManager", level=Qgis.Info)
 
         if self.lastActiveLayer and \
                 self.lastActiveLayer.receivers(self.lastActiveLayer.selectionChanged) > 0:
@@ -267,9 +266,9 @@ class AttachmentManager:
                 title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
 
     def onActiveLayerChanged(self, layer):
-        QgsMessageLog.logMessage(
-            f"Active layer changing! {layer.name() if layer else 'None'}",
-            tag="AttachmentManager", level=Qgis.Info)
+        # QgsMessageLog.logMessage(
+        #     f"Active layer changing! {layer.name() if layer else 'None'}",
+        #     tag="AttachmentManager", level=Qgis.Info)
         if layer and self.dlgActive:
             if layer != self.lastActiveLayer:
                 if self.checkLayerOrigin(layer):
@@ -286,8 +285,8 @@ class AttachmentManager:
                     self.dlg.listAttachment.clear()
 
     def checkLayerOrigin(self, layer):
-        QgsMessageLog.logMessage(
-            f"Checking layer origin! '{layer.name()}'", tag="AttachmentManager", level=Qgis.Info)
+        # QgsMessageLog.logMessage(
+        #     f"Checking layer origin! '{layer.name()}'", tag="AttachmentManager", level=Qgis.Info)
         if layer.dataProvider().name() != 'postgres':
             self.dlg.attachmentLabel.setText(self.tr("Active layer is not a PostGIS layer"))
             showMsgBox(
@@ -296,15 +295,15 @@ class AttachmentManager:
             self.connParams = None
             return False
         self.connParams = parseConnectionString(layer.source())
-        QgsMessageLog.logMessage(
-            f"PostGIS lag -> Connection params: '{self.connParams}'",
-            tag="AttachmentManager", level=Qgis.Info)
+        # QgsMessageLog.logMessage(
+        #     f"PostGIS lag -> Connection params: '{self.connParams}'",
+        #     tag="AttachmentManager", level=Qgis.Info)
         return True
 
     def checkLayerAttachmentTable(self, layer):
-        QgsMessageLog.logMessage(
-            f"Connecting to '{self.connParams['dbname']}' table '{self.connParams['table'][1]}'"
-            f" on '{self.connParams['host']}'", 'AttachmentManager', level=Qgis.Info)
+        # QgsMessageLog.logMessage(
+        #     f"Connecting to '{self.connParams['dbname']}' table '{self.connParams['table'][1]}'"
+        #     f" on '{self.connParams['host']}'", 'AttachmentManager', level=Qgis.Info)
         attTable = self.connParams['table'][1] + self.tablePostfix
         connection = psycopg2.connect(
             database=self.connParams['dbname'], user=self.connParams['user'],
@@ -313,23 +312,24 @@ class AttachmentManager:
         sql = (f"SELECT table_name FROM information_schema.tables "
                f"WHERE table_schema = '{self.connParams['table'][0]}' "
                f"AND table_type = 'BASE TABLE' AND table_name = '{attTable}';")
-        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        # QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
         cursor.execute(sql)
         row = cursor.fetchone()
 
         if row is not None:
-            QgsMessageLog.logMessage(
-                f"Attachment table '{attTable}' exists!", 'AttachmentManager', level=Qgis.Info)
+            # QgsMessageLog.logMessage(
+            #     f"Attachment table '{attTable}' exists!", 'AttachmentManager', level=Qgis.Info)
             text = self.tr("Attachments on the selected feature on layer")
             self.dlg.attachmentLabel.setText((f"{text} '{layer.name()}'"))
             self.findRelationalID(cursor, attTable, self.connParams['table'][0])
             self.loadAttachmentList(layer)
             connection.close()
-            self.dlg.btnSetupAttachments.setEnabled(False)
+            #self.dlg.btnSetupAttachments.setEnabled(False)
+            self._toggleButtons(True)
             return True
         else:
-            QgsMessageLog.logMessage(
-                f"No attachment table on layer '{layer.name()}'", 'AttachmentManager', level=Qgis.Info)
+            # QgsMessageLog.logMessage(
+            #     f"No attachment table on layer '{layer.name()}'", 'AttachmentManager', level=Qgis.Info)
             text = self.tr("No attachments on layer")
             self.dlg.attachmentLabel.setText(f"{text} '{layer.name()}'")
             self.dlg.listAttachment.clear()
@@ -338,7 +338,8 @@ class AttachmentManager:
             showMsgBox(f"{text1}'{attTable}'{text2}",
                 title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
             connection.close()
-            self.dlg.btnSetupAttachments.setEnabled(True)
+            #self.dlg.btnSetupAttachments.setEnabled(True)
+            self._toggleButtons(False)
             return False
 
     def findRelationalID(self, cursor, attTable, schema):
@@ -350,10 +351,19 @@ class AttachmentManager:
                 self.relationalID = col
                 break
 
+    def _toggleButtons(self, state):
+        # Enables/disables button based on state
+        # If true attachment table exists and button states are set accordingly
+        self.dlg.btnSetupAttachments.setEnabled(not state)
+        self.dlg.btnAttachShow.setEnabled(state)
+        self.dlg.btnAttachAdd.setEnabled(state)
+        self.dlg.btnAttachDelete.setEnabled(state)
+        return
+
     def loadAttachmentList(self, layer):
-        QgsMessageLog.logMessage(
-            f"Clearing and loading attachment from new selection: {layer.name()}",
-            tag="AttachmentManager", level=Qgis.Info)
+        # QgsMessageLog.logMessage(
+        #     f"Clearing and loading attachment from new selection: {layer.name()}",
+        #     tag="AttachmentManager", level=Qgis.Info)
         attTable = self.connParams['table'][1] + self.tablePostfix
         schema = self.connParams['table'][0]
         self.dlg.listAttachment.clear()
@@ -369,7 +379,7 @@ class AttachmentManager:
         cursor = connection.cursor()
         sql = (f'SELECT "{self.fieldSetup["name_field"]}" FROM "{schema}"."{attTable}" '
                f'WHERE "{self.relationalID}" = {self.selectedFeatureID};')
-        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        # QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
         cursor.execute(sql)
         rows = cursor.fetchall()
         for row in rows:
@@ -381,9 +391,9 @@ class AttachmentManager:
     def onSelectionChanged(self, selected_ids, deselected_ids, clear_and_select):
         if not selected_ids and not deselected_ids:
             return
-        QgsMessageLog.logMessage(
-            f"Selection changed - number of selected features: {self.lastActiveLayer.selectedFeatureCount()}",
-            tag="AttachmentManager", level=Qgis.Info)
+        # QgsMessageLog.logMessage(
+        #     f"Selection changed - number of selected features: {self.lastActiveLayer.selectedFeatureCount()}",
+        #     tag="AttachmentManager", level=Qgis.Info)
         if self.dlgActive:
             if self.lastActiveLayer.selectedFeatureCount() != 1:
                 showMsgBox(
@@ -391,12 +401,9 @@ class AttachmentManager:
                     title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
                 self.dlg.listAttachment.clear()
             else:
-                QgsMessageLog.logMessage(
-                    "Exactly 1 feature selected!", tag="AttachmentManager", level=Qgis.Info)
                 self.loadAttachmentList(self.lastActiveLayer)
 
     def showAttachment(self):
-        QgsMessageLog.logMessage("Show attachment called!", tag="AttachmentManager", level=Qgis.Info)
         item = self.dlg.listAttachment.currentItem()
         if item is None:
             showMsgBox(self.tr("No attachment selected in the list!"),
@@ -413,7 +420,7 @@ class AttachmentManager:
         sql = (f'SELECT "{self.fieldSetup["content_field"]}" FROM "{schema}"."{attTable}" '
                f'WHERE "{self.relationalID}" = {self.selectedFeatureID} '
                f'AND "{self.fieldSetup["name_field"]}" = \'{item.text()}\';')
-        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        # QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
         cursor.execute(sql)
         row = cursor.fetchone()
 
@@ -468,8 +475,8 @@ class AttachmentManager:
             connection.close()
             return
 
-        QgsMessageLog.logMessage(
-            f"Opening temp file: '{tempFilePath}'", tag="AttachmentManager", level=Qgis.Info)
+        # QgsMessageLog.logMessage(
+        #     f"Opening temp file: '{tempFilePath}'", tag="AttachmentManager", level=Qgis.Info)
         connection.close()
 
         if sys.platform.startswith("win"):
@@ -483,7 +490,6 @@ class AttachmentManager:
                 subprocess.run(["xdg-open", tempFilePath], check=False)
 
     def addAttachment(self):
-        QgsMessageLog.logMessage("Add attachment called!", tag="AttachmentManager", level=Qgis.Info)
         if len(self.lastActiveLayer.selectedFeatures()) != 1:
             showMsgBox(self.tr("Choose exactly one feature to add attachments to!"),
                        title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
@@ -498,9 +504,9 @@ class AttachmentManager:
                            title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
                 return
             selectedFilePath = selectedFiles[0]
-            QgsMessageLog.logMessage(
-                f"Selected file to be attached: '{selectedFilePath}'",
-                tag="AttachmentManager", level=Qgis.Info)
+            # QgsMessageLog.logMessage(
+            #     f"Selected file to be attached: '{selectedFilePath}'",
+            #     tag="AttachmentManager", level=Qgis.Info)
         else:
             return
 
@@ -522,7 +528,6 @@ class AttachmentManager:
         self.loadAttachmentList(self.lastActiveLayer)
 
     def deleteAttachment(self):
-        QgsMessageLog.logMessage("Delete attachment called!", tag="AttachmentManager", level=Qgis.Info)
         item = self.dlg.listAttachment.currentItem()
         if item is None:
             showMsgBox(self.tr("No attachment selected in the list!"),
@@ -538,7 +543,7 @@ class AttachmentManager:
         sql = (f'DELETE FROM "{schema}"."{attTable}" '
                f'WHERE "{self.relationalID}" = {self.selectedFeatureID} '
                f'AND "{self.fieldSetup["name_field"]}" = \'{item.text()}\';')
-        QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+        # QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
         cursor.execute(sql)
         connection.commit()
         connection.close()
@@ -557,8 +562,8 @@ class AttachmentManager:
                 title=self.tr("Confirmation"),
                 icon=QMessageBox.Icon.Warning,
                 buttons=QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No) == True:
-            QgsMessageLog.logMessage(
-                "Setup attachment table called!", tag="AttachmentManager", level=Qgis.Info)
+            # QgsMessageLog.logMessage(
+            #     "Setup attachment table called!", tag="AttachmentManager", level=Qgis.Info)
             connection = psycopg2.connect(
                 database=self.connParams['dbname'], user=self.connParams['user'],
                 host=self.connParams['host'], password=self.connParams['password'])
@@ -570,7 +575,7 @@ class AttachmentManager:
                    f'"{self.fieldSetup["name_field"]}" VARCHAR(255) NOT NULL, '
                    f'"{self.fieldSetup["content_field"]}" BYTEA NOT NULL, '
                    f'"{self.relationalID}" INTEGER NOT NULL);')
-            QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
+            # QgsMessageLog.logMessage(f"SQL statement: '{sql}'", 'AttachmentManager', level=Qgis.Info)
             cursor.execute(sql)
             connection.commit()
             connection.close()
@@ -580,8 +585,24 @@ class AttachmentManager:
                 f"{text1} '{attTable}' {text2}",
                 title=self.tr("Info"), icon=QMessageBox.Icon.Information)
             self.onActiveLayerChanged(layer)
-            self.dlg.btnSetupAttachments.setEnabled(False)
+            #self.dlg.btnSetupAttachments.setEnabled(False)
+            self._toggleButtons(True)
 
+    def _onAbout(self):
+        try:
+            _RichText = Qt.TextFormat.RichText          # Qt6
+            _BrowserInteraction = Qt.TextInteractionFlag.TextBrowserInteraction  # Qt6
+        except AttributeError:
+            _RichText = Qt.RichText                     # Qt5
+            _BrowserInteraction = Qt.TextBrowserInteraction  # Qt5
+
+        msg = QMessageBox()
+        msg.setWindowTitle(self.tr('About') + ' – ' + self.tr('AttachmentManager'))
+        msg.setIcon(QMessageBox.Icon.Information)
+        msg.setTextFormat(_RichText)
+        msg.setText(self.tr('The plugin \'AttachmentManager\' was developed by <a href="https://styrke10.dk">Styrke 10 ApS</a> according to the specification of <a href="https://taarnbyforsyning.dk/">TÅRNBY Forsyning.</a>'))
+        msg.setTextInteractionFlags(_BrowserInteraction)
+        msg.exec()
 
 ### === End of AttachmentManager class === ###
 

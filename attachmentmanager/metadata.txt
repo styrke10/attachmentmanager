@@ -26,7 +26,7 @@ changelog=V 1.0.1: Fixed security issues
 	V 0.2.0: Qt5/Qt6 compatibility update (QGIS 3.x and 4.x)
 
 # Tags are comma separated with spaces allowed
-tags=python
+tags=python,attachment,postgis
 
 homepage=https://github.com/styrke10/attachmentmanager
 category=Plugins

@@ -23,9 +23,8 @@
 """
 
 import os
-from qgis.PyQt import uic # type: ignore
-from qgis.PyQt import QtWidgets # type: ignore
-from qgis.core import Qgis, QgsMessageLog # type: ignore
+from qgis.PyQt import uic  # type: ignore
+from qgis.PyQt import QtWidgets  # type: ignore
 
 
 # This loads your .ui file so that PyQt can populate your plugin with the elements from Qt Designer
@@ -42,14 +41,14 @@ class AttachmentManagerDialog(QtWidgets.QDialog, FORM_CLASS):
         # self.<objectname>, and you can use autoconnect slots - see
         # http://qt-project.org/doc/qt-4.8/designer-using-a-ui-file.html
         # #widgets-and-dialogs-with-auto-connect
-        
+
         self.setupUi(self)
         self.plugin = plugin
-        
+
         # Connect the close button to the function doing this
         self.btnClose.clicked.connect(self.closeDlg)
         self.btnSetupAttachments.clicked.connect(self.plugin.setupAttachmentTable)
-        self.btnSetupAttachments.setEnabled(False)  # Initially disable the setup button  
+        self.btnSetupAttachments.setEnabled(False)  # Initially disable the setup button
 
 
     def closeDlg(self):
@@ -58,5 +57,5 @@ class AttachmentManagerDialog(QtWidgets.QDialog, FORM_CLASS):
 
     def closeEvent(self, event):
         self.plugin.dlgActive = False
-        
+
         super().closeEvent(event)

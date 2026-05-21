@@ -7,26 +7,27 @@ name=AttachmentManager
 qgisMinimumVersion=3.4
 qgisMaximumVersion=4.99
 description=This plugin provides functionality that makes it possible to add, delete and show attachments (files) to spatial objects in a PostGIS database.
-version=0.2.0
+version=1.0.0
 author=Morten Storm, Styrke 10 ApS
 email=morten@styrke10.dk
 
-about=This plugin provides functionality that makes it possible to add, delete and show attachments (files) to spatial objects in a PostGIS database.
+about=If you have the need to store for instance construction drawings for individual pipes in a utility network, save images of installed key cabinets on specific operational building polygons, or attach spreadsheets with analysis data to particular points within an area of interest, AttachmentManager can help you accomplish this.
 
-tracker=http://bugs
-repository=http://repo
+tracker=https://github.com/styrke10/attachmentmanager/issues
+repository=https://github.com/styrke10/attachmentmanager
 # End of mandatory metadata
 
 # Recommended items:
 
 hasProcessingProvider=no
 # changelog:
-changelog=Qt5/Qt6 compatibility update (QGIS 3.x and 4.x)
+changelog=V 1.0.0: Added Danish and English user interface
+V 0.2.0: Qt5/Qt6 compatibility update (QGIS 3.x and 4.x)
 
 # Tags are comma separated with spaces allowed
 tags=python
 
-homepage=http://homepage
+homepage=https://github.com/styrke10/attachmentmanager
 category=Plugins
 icon=attachment.png
 # experimental flag

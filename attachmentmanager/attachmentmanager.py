@@ -293,8 +293,11 @@ class AttachmentManager:
                 self.tr("The selected layer is not a PostGIS layer!"),
                 title=self.tr("Warning"), icon=QMessageBox.Icon.Warning)
             self.connParams = None
+            # Make buttons inactive since we cannot work with non-PostGIS layers; setup button is also not relevant since we don't have connection params
+            self._toggleButtons(False,False)
             return False
         self.connParams = parseConnectionString(layer.source())
+        self._toggleButtons(True)  # Enable buttons; specific attachment table presence will be checked in checkLayerAttachmentTable
         # QgsMessageLog.logMessage(
         #     f"PostGIS lag -> Connection params: '{self.connParams}'",
         #     tag="AttachmentManager", level=Qgis.Info)
@@ -351,10 +354,13 @@ class AttachmentManager:
                 self.relationalID = col
                 break
 
-    def _toggleButtons(self, state):
+    def _toggleButtons(self, state, setupBtn=None):
         # Enables/disables button based on state
         # If true attachment table exists and button states are set accordingly
-        self.dlg.btnSetupAttachments.setEnabled(not state)
+        if setupBtn is None:
+            self.dlg.btnSetupAttachments.setEnabled(not state)
+        else:
+            self.dlg.btnSetupAttachments.setEnabled(setupBtn)
         self.dlg.btnAttachShow.setEnabled(state)
         self.dlg.btnAttachAdd.setEnabled(state)
         self.dlg.btnAttachDelete.setEnabled(state)
